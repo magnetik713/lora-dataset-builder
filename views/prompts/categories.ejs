@@ -1,0 +1,48 @@
+<%- include('../partials/header') %>
+<div class="page-header">
+  <h1>Prompt Categories</h1>
+  <% if (paid) { %><a href="/prompts/categories/new" class="btn btn-primary">+ New Category</a><% } %>
+</div>
+<% if (query.locked) { %>
+<div style="background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid var(--accent);padding:12px 16px;border-radius:3px;margin-bottom:1rem;font-size:14px">
+  &#128274; Category creation is a paid feature. <a href="/prompts/settings" style="color:var(--accent)">Enter your license key in Settings</a> to unlock.
+</div>
+<% } %>
+<p style="color:var(--muted);margin-bottom:1.5rem"><%= total %> categories &mdash; used with <code>node llm_generator.js --category &lt;name&gt;</code></p>
+
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:2rem">
+  <% grouped.forEach(g => { %>
+  <a href="#section-<%= g.type %>" style="font-size:12px;padding:4px 10px;border-radius:3px;border:1px solid var(--border);color:var(--text);text-decoration:none;background:var(--bg2)"><%= g.label %> <span style="color:var(--muted)">(<%= g.items.length %>)</span></a>
+  <% }) %>
+</div>
+
+<% grouped.forEach(g => { %>
+<section id="section-<%= g.type %>" style="margin-bottom:2.5rem">
+  <h2 style="font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:0"><%= g.label %> <span style="font-weight:400;opacity:.6">(<%= g.items.length %>)</span></h2>
+  <table class="prompt-table" style="width:100%;border-collapse:collapse">
+    <tbody>
+    <% g.items.forEach(c => { %>
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:7px 12px;font-family:monospace;font-size:12px;white-space:nowrap;width:160px"><code><%= c.name %></code></td>
+        <td style="padding:7px 12px;font-size:13px"><%= c.label %></td>
+        <% if (paid) { %><td style="padding:7px 12px;font-size:12px;color:var(--muted);max-width:380px"><%= c.emphasis ? c.emphasis.slice(0,110) + (c.emphasis.length > 110 ? '…' : '') : '' %></td><% } %>
+        <% if (paid) { %>
+        <td style="padding:7px 12px;white-space:nowrap;width:100px">
+          <a href="/prompts/categories/<%= c.id %>/edit" class="btn btn-secondary" style="font-size:11px;padding:3px 7px">Edit</a>
+          <form method="POST" action="/prompts/categories/<%= c.id %>/delete" style="display:inline" onsubmit="return confirm('Delete <%= c.name %>?')">
+            <button type="submit" class="btn btn-secondary" style="font-size:11px;padding:3px 7px;color:#e55">Del</button>
+          </form>
+        </td>
+        <% } %>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+  <% if (!paid && g.hidden > 0) { %>
+  <div style="padding:8px 12px;font-size:12px;color:var(--muted);border-top:1px dashed var(--border)">
+    + <%= g.hidden %> more <%= g.label.toLowerCase() %> available with a license &mdash; <a href="/prompts/settings" style="color:var(--accent)">unlock</a>
+  </div>
+  <% } %>
+</section>
+<% }) %>
+<%- include('../partials/footer') %>

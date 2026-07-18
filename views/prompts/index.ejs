@@ -1,0 +1,839 @@
+<%- include('../partials/header') %>
+<style>
+  .select-bar { display:none; align-items:center; gap:10px; padding:8px 0; margin-bottom:4px }
+  .select-bar.active { display:flex }
+  .select-bar span { font-size:13px; color:var(--muted) }
+  .export-wrap { position:relative }
+  .export-menu { display:none; position:absolute; top:calc(100% + 4px); left:0; background:var(--bg2); border:1px solid var(--border2); border-radius:var(--radius); min-width:80px; z-index:100; overflow:hidden }
+  .export-menu.open { display:block }
+  .export-menu button { display:block; width:100%; text-align:left; padding:7px 12px; font-size:12px; color:var(--text); background:none; border:none; cursor:pointer; font-family:var(--font) }
+  .export-menu button:hover { background:var(--bg3); }
+
+  .prompt-list { display:flex; flex-direction:column; gap:1px; }
+  .prompt-row {
+    display:flex; align-items:flex-start; gap:12px;
+    padding:8px 10px; background:var(--bg2); border-radius:var(--radius);
+    border:1px solid var(--border); transition:border-color .12s;
+    text-decoration:none; color:var(--text); position:relative;
+  }
+  .prompt-row:hover { border-color:var(--border2); text-decoration:none; background:var(--bg3); }
+  .row-check { display:none; flex-shrink:0; accent-color:var(--accent); cursor:pointer; }
+  .select-mode .row-check { display:block; }
+  .select-mode .prompt-row.selected { border-color:var(--accent); }
+  .row-thumb {
+    width:48px; height:48px; flex-shrink:0; border-radius:3px;
+    overflow:hidden; background:var(--bg3); display:flex; align-items:center; justify-content:center;
+    font-size:18px; color:var(--dim); border:1px solid var(--border);
+  }
+  .row-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .row-body { flex:1; min-width:0; }
+  .row-name { font-size:12px; color:var(--text); overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.5; }
+  .row-meta { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
+  .row-tags { display:flex; gap:3px; flex-wrap:wrap; justify-content:flex-end; max-width:200px; }
+  .row-date { font-size:10px; color:var(--dim); white-space:nowrap; }
+  .row-actions { display:flex; gap:4px; flex-shrink:0; align-items:center; }
+  .row-btn {
+    background:transparent; border:1px solid var(--border); color:var(--muted);
+    border-radius:var(--radius); padding:3px 8px; font-size:11px; cursor:pointer;
+    font-family:var(--font); transition:all .12s; white-space:nowrap;
+  }
+  .row-btn:hover { border-color:var(--border2); color:var(--text); }
+  .row-btn.star { color:var(--dim); }
+  .row-btn.star.on { color:#d4a853; border-color:#d4a853; }
+  .row-btn.copy.copied { color:#6db86d; border-color:#6db86d; }
+  .row-btn.comfy { color:var(--dim); }
+  .row-btn.comfy.queued { color:#6db86d; border-color:#6db86d; }
+  .row-btn.comfy.err { color:#c0392b; border-color:#c0392b; }
+  .row-btn.comfy.running { color:#e09a3a; border-color:#e09a3a; }
+  .row-btn.dl { display:none; }
+  .row-btn.dl.has-img { display:inline-block; }
+  @keyframes dl-pulse { 0%,100%{border-color:var(--border);color:var(--muted)} 50%{border-color:var(--accent);color:var(--accent);box-shadow:0 0 6px var(--accent)} }
+  .row-btn.dl.ready { animation:dl-pulse .8s ease 4; }
+  .controls-bar { display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .sort-btn { padding:4px 12px; border-radius:var(--radius); font-size:12px; background:var(--bg2); color:var(--dim); border:1px solid var(--border); cursor:pointer; text-decoration:none; }
+  .sort-btn:hover { color:var(--text); text-decoration:none; }
+  .sort-btn.active { color:var(--accent); border-color:var(--accent); }
+
+  .png-drop-zone {
+    border: 2px dashed var(--border2); border-radius: var(--radius);
+    padding: 18px 24px; margin-bottom: 12px; text-align: center;
+    color: var(--dim); font-size: 13px; cursor: pointer;
+    transition: border-color .15s, background .15s;
+    background: var(--bg2);
+  }
+  .png-drop-zone.dragover { border-color: var(--accent); background: var(--bg3); color: var(--text); }
+  .png-drop-zone input[type=file] { display: none; }
+
+  .import-modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    z-index: 200; align-items: center; justify-content: center;
+  }
+  .import-modal-overlay.open { display: flex; }
+  .import-modal {
+    background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius);
+    padding: 28px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;
+  }
+  .import-modal h3 { margin: 0 0 16px; font-size: 15px; }
+  .import-modal label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .import-modal textarea {
+    width: 100%; box-sizing: border-box; background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); border-radius: var(--radius); padding: 8px; font-size: 12px;
+    font-family: var(--font-mono, monospace); resize: vertical; margin-bottom: 12px;
+  }
+  .import-modal .row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .import-modal .row label { margin: 0; font-size: 13px; color: var(--text); }
+  .import-modal input[type=text] {
+    flex: 1; background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); border-radius: var(--radius); padding: 6px 8px; font-size: 12px;
+  }
+  .import-modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .import-no-data { color: var(--muted); font-size: 13px; }
+</style>
+
+<div class="page-header">
+  <h1>Prompt Library</h1>
+  <% if (!paid) { %>
+  <span style="font-size:11px;color:var(--muted);font-family:var(--font-mono)"><%= promptTotal %> / 100 prompts &mdash; <a href="/prompts/settings" style="color:var(--accent)">upgrade for unlimited</a></span>
+  <% } %>
+  <div style="display:flex;gap:8px">
+    <button id="select-toggle" class="btn btn-secondary" onclick="toggleSelect()">Select</button>
+    <a href="/prompts/new" class="btn btn-primary">+ New</a>
+  </div>
+</div>
+
+<div id="select-bar" class="select-bar">
+  <span id="sel-count">0 selected</span>
+  <button class="btn btn-secondary" onclick="selectAll()">All</button>
+  <button class="btn btn-secondary" onclick="selectNone()">None</button>
+  <button id="del-btn" class="btn" style="background:#c0392b;color:#fff;border-color:#c0392b" onclick="deleteSelected()" disabled>Delete</button>
+  <button id="queue-btn" class="btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="queueSelected(this)" disabled>&#x26A1; Queue</button>
+  <div class="export-wrap">
+    <button id="export-btn" class="btn btn-secondary" onclick="toggleExportMenu(event)" disabled>Export ▾</button>
+    <div class="export-menu" id="export-menu">
+      <button onclick="exportSelected('csv')">CSV</button>
+      <button onclick="exportSelected('json')">JSON</button>
+      <button onclick="exportSelected('txt')">TXT</button>
+    </div>
+  </div>
+</div>
+
+<form id="batch-form" method="POST" action="/prompts/batch-delete" style="display:none">
+  <div id="batch-ids"></div>
+</form>
+
+<form method="GET" action="/prompts" class="search-bar">
+  <input type="text" name="q" value="<%= q %>" placeholder="Search name, tags, prompt...">
+  <button type="submit" class="btn btn-secondary">Search</button>
+  <% if (q) { %><a href="/prompts" class="btn btn-secondary">Clear</a><% } %>
+</form>
+
+
+<div id="png-drop-zone" class="png-drop-zone" onclick="document.getElementById('png-file-input').click()">
+  <input type="file" id="png-file-input" accept="image/png">
+  Drop a PNG here to import its prompt &amp; workflow &mdash; <u>or click to browse</u>
+</div>
+
+<div id="import-modal-overlay" class="import-modal-overlay">
+  <div class="import-modal">
+    <h3>Import from image</h3>
+    <div id="import-no-data" class="import-no-data" style="display:none">No prompt or workflow metadata found in this image.</div>
+    <div id="import-format-note" style="display:none;font-size:12px;padding:8px 10px;border-radius:4px;margin-bottom:10px;background:rgba(224,154,58,0.12);color:#e09a3a;border:1px solid rgba(224,154,58,0.25)"></div>
+    <div id="import-prompt-section">
+      <label>Positive prompt</label>
+      <textarea id="import-positive" rows="5"></textarea>
+      <label>Negative prompt</label>
+      <textarea id="import-negative" rows="3"></textarea>
+    </div>
+    <div id="import-workflow-section" style="display:none">
+      <div id="import-wf-hint" style="display:none;font-size:11px;color:var(--muted);margin-bottom:8px;font-family:var(--font-mono,monospace)"></div>
+      <div class="row">
+        <label style="white-space:nowrap">Workflow name</label>
+        <input type="text" id="import-wf-name" value="Imported from image">
+      </div>
+    </div>
+    <div id="import-wf-saved-note" style="display:none;font-size:12px;color:#6db86d;margin-bottom:8px"></div>
+    <div class="actions" style="flex-wrap:wrap;gap:8px">
+      <button class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+      <button id="import-adapt-btn" class="btn btn-secondary" style="display:none" onclick="adaptPrompt()">Adapt for my workflow</button>
+      <button id="import-save-btn" class="btn btn-primary" onclick="saveImport()">Import prompt</button>
+    </div>
+  </div>
+</div>
+
+<%
+  function catUrl(c) {
+    const p = [];
+    if (q) p.push('q=' + encodeURIComponent(q));
+    selectedTags.forEach(t => p.push('tag=' + encodeURIComponent(t)));
+    if (c) p.push('category=' + encodeURIComponent(c));
+    return '/prompts' + (p.length ? '?' + p.join('&') : '');
+  }
+  function tagUrl(tags) {
+    const p = [];
+    if (q) p.push('q=' + encodeURIComponent(q));
+    tags.forEach(t => p.push('tag=' + encodeURIComponent(t)));
+    if (selectedCategory) p.push('category=' + encodeURIComponent(selectedCategory));
+    return '/prompts' + (p.length ? '?' + p.join('&') : '');
+  }
+  function pageUrl(pg) {
+    const parts = [];
+    if (q) parts.push('q=' + encodeURIComponent(q));
+    selectedTags.forEach(t => parts.push('tag=' + encodeURIComponent(t)));
+    if (selectedCategory) parts.push('category=' + encodeURIComponent(selectedCategory));
+    if (pg > 1) parts.push('page=' + pg);
+    return '/prompts' + (parts.length ? '?' + parts.join('&') : '');
+  }
+  function pageRange(cur, total) {
+    const pages = new Set([1, total, cur-1, cur, cur+1].filter(p => p >= 1 && p <= total));
+    const sorted = [...pages].sort((a,b) => a-b);
+    const result = []; let prev = null;
+    for (const p of sorted) {
+      if (prev !== null && p - prev > 1) result.push('…');
+      result.push(p); prev = p;
+    }
+    return result;
+  }
+%>
+
+<%
+  function sortUrl(s) {
+    const p = [];
+    if (q) p.push('q=' + encodeURIComponent(q));
+    selectedTags.forEach(t => p.push('tag=' + encodeURIComponent(t)));
+    if (selectedCategory) p.push('category=' + encodeURIComponent(selectedCategory));
+    if (showStarred) p.push('starred=1');
+    if (s !== 'newest') p.push('sort=' + s);
+    return '/prompts' + (p.length ? '?' + p.join('&') : '');
+  }
+  function starredUrl(on) {
+    const p = [];
+    if (q) p.push('q=' + encodeURIComponent(q));
+    selectedTags.forEach(t => p.push('tag=' + encodeURIComponent(t)));
+    if (selectedCategory) p.push('category=' + encodeURIComponent(selectedCategory));
+    if (selectedSort !== 'newest') p.push('sort=' + selectedSort);
+    if (on) p.push('starred=1');
+    return '/prompts' + (p.length ? '?' + p.join('&') : '');
+  }
+%>
+
+<div class="controls-bar">
+  <a href="<%= sortUrl('newest') %>" class="sort-btn <%= selectedSort==='newest' ? 'active' : '' %>">Newest</a>
+  <a href="<%= sortUrl('oldest') %>" class="sort-btn <%= selectedSort==='oldest' ? 'active' : '' %>">Oldest</a>
+  <a href="<%= sortUrl('az') %>"     class="sort-btn <%= selectedSort==='az'     ? 'active' : '' %>">A–Z</a>
+  <a href="<%= sortUrl('category') %>" class="sort-btn <%= selectedSort==='category' ? 'active' : '' %>">Category</a>
+  <a href="<%= sortUrl('starred') %>" class="sort-btn <%= selectedSort==='starred' ? 'active' : '' %>">★ First</a>
+  <span style="margin-left:4px;width:1px;height:20px;background:var(--border);display:inline-block"></span>
+  <a href="<%= starredUrl(!showStarred) %>" class="sort-btn <%= showStarred ? 'active' : '' %>">★ Starred</a>
+  <% if (categories.length > 0) { %>
+  <span style="margin-left:4px;width:1px;height:20px;background:var(--border);display:inline-block"></span>
+  <a href="<%= catUrl('') %>" class="sort-btn <%= !selectedCategory ? 'active' : '' %>">All</a>
+  <% categories.forEach(c => { %>
+    <a href="<%= catUrl(c) %>" class="sort-btn <%= selectedCategory===c ? 'active' : '' %>"><%= c %></a>
+  <% }) %>
+  <% } %>
+</div>
+
+<div class="results-bar">
+  <%= total %> prompt<%= total !== 1 ? 's' : '' %><% if (totalPages > 1) { %> &mdash; page <%= page %> of <%= totalPages %><% } %>
+</div>
+
+<% if (prompts.length === 0) { %>
+  <div class="empty">
+    <p>No prompts found. <a href="/prompts/new">Save your first one</a>.</p>
+  </div>
+<% } else { %>
+<div class="prompt-list" id="card-grid">
+  <% prompts.forEach(p => { %>
+  <div class="prompt-row-wrap" style="display:flex;align-items:center;gap:8px;margin-bottom:1px">
+    <input type="checkbox" class="row-check" value="<%= p.id %>" onchange="onCheck(this)">
+    <div class="row-actions">
+      <button class="row-btn star <%= p.starred ? 'on' : '' %>" data-id="<%= p.id %>" onclick="toggleStar(event,this)" title="Star">★</button>
+      <button class="row-btn comfy" data-id="<%= p.id %>" data-starred="<%= p.starred ? '1' : '' %>" data-text="<%- (p.positive||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/\n/g,' ') %>" onclick="queueComfy(event,this)" title="<%= p.starred ? 'Starred — locked' : 'Send to ComfyUI' %>">⚡</button>
+      <button class="row-btn copy" data-text="<%- (p.positive||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/\n/g,' ') %>" onclick="copyPrompt(event,this)" title="Copy prompt text to clipboard">Copy</button>
+      <button class="row-btn dl<%= p.image_path ? ' has-img' : '' %>" data-src="<%= p.image_path ? '/prompts/' + p.image_path : '' %>" onclick="downloadRowImg(event,this)" title="Download image">&#x2B07;</button>
+      <% if (p.workflow_json_path) { %><button class="row-btn has-img" data-src="/prompts/<%= p.workflow_json_path %>" onclick="downloadRowWf(event,this)" title="Download workflow JSON">&#x29B9;</button><% } %>
+    </div>
+    <a href="/prompts/<%= p.id %>" class="prompt-row" style="flex:1" id="row-<%= p.id %>">
+      <div class="row-thumb" style="position:relative">
+        <% if (p.image_path) { %>
+          <img src="/prompts/<%= p.image_path %>" alt="">
+        <% } else { %>
+          ✦
+        <% } %>
+        <% if (p.tags && p.tags.includes('imported') && !p.workflow_json_path) { %><span style="position:absolute;top:2px;right:2px;font-size:9px;background:rgba(224,154,58,0.85);color:#000;border-radius:2px;padding:1px 3px;line-height:1.4" title="Imported without ComfyUI workflow — regenerating uses Settings workflow">EXT</span><% } %>
+      </div>
+      <div class="row-body">
+        <div class="row-name"><%= p.positive || p.name %></div>
+      </div>
+      <div class="row-meta">
+        <% if (p.tags) { %>
+        <div class="row-tags">
+          <% p.tags.split(',').slice(0,3).forEach(t => { %>
+            <span class="tag"><%= t.trim() %></span>
+          <% }) %>
+        </div>
+        <% } %>
+        <div class="row-date"><%= new Date(p.created_at).toLocaleDateString() %></div>
+      </div>
+    </a>
+  </div>
+  <% }) %>
+</div>
+
+<% if (totalPages > 1) { %>
+<div class="pagination">
+  <% if (page > 1) { %><a href="<%= pageUrl(page-1) %>" class="page-btn">&laquo;</a><% } %>
+  <% pageRange(page, totalPages).forEach(p => { %>
+    <% if (p === '…') { %>
+      <span class="page-ellipsis">…</span>
+    <% } else { %>
+      <a href="<%= pageUrl(p) %>" class="page-btn <%= p === page ? 'active' : '' %>"><%= p %></a>
+    <% } %>
+  <% }) %>
+  <% if (page < totalPages) { %><a href="<%= pageUrl(page+1) %>" class="page-btn">&raquo;</a><% } %>
+</div>
+<% } %>
+<% } %>
+
+<script>
+let selectMode = false;
+const SP_SEL_KEY = 'sp_selection';
+
+function getStoredIds() { try { return new Set(JSON.parse(localStorage.getItem(SP_SEL_KEY) || '[]')); } catch(e) { return new Set(); } }
+function saveStoredIds(set) { localStorage.setItem(SP_SEL_KEY, JSON.stringify([...set])); }
+function clearStoredIds() { localStorage.removeItem(SP_SEL_KEY); }
+
+function toggleSelect() {
+  selectMode = !selectMode;
+  document.getElementById('card-grid').classList.toggle('select-mode', selectMode);
+  document.getElementById('select-bar').classList.toggle('active', selectMode);
+  document.getElementById('select-toggle').textContent = selectMode ? 'Cancel' : 'Select';
+  if (!selectMode) { clearStoredIds(); selectNone(); }
+}
+
+function onCheck(cb) {
+  cb.closest('.prompt-row-wrap').querySelector('.prompt-row').classList.toggle('selected', cb.checked);
+  const stored = getStoredIds();
+  if (cb.checked) stored.add(cb.value); else stored.delete(cb.value);
+  saveStoredIds(stored);
+  updateCount();
+}
+
+function selectAll() {
+  const stored = getStoredIds();
+  document.querySelectorAll('.row-check').forEach(cb => {
+    cb.checked = true;
+    cb.closest('.prompt-row-wrap').querySelector('.prompt-row').classList.add('selected');
+    stored.add(cb.value);
+  });
+  saveStoredIds(stored);
+  updateCount();
+}
+
+function selectNone() {
+  document.querySelectorAll('.row-check').forEach(cb => {
+    cb.checked = false;
+    cb.closest('.prompt-row-wrap').querySelector('.prompt-row').classList.remove('selected');
+  });
+  clearStoredIds();
+  updateCount();
+}
+
+function updateCount() {
+  const n = getStoredIds().size;
+  document.getElementById('sel-count').textContent = n + ' selected';
+  document.getElementById('del-btn').disabled = n === 0;
+  document.getElementById('queue-btn').disabled = n === 0;
+  document.getElementById('export-btn').disabled = n === 0;
+}
+
+// Restore selection state on page load
+(function restoreSelection() {
+  const stored = getStoredIds();
+  if (!stored.size) return;
+  selectMode = true;
+  document.getElementById('card-grid').classList.add('select-mode');
+  document.getElementById('select-bar').classList.add('active');
+  document.getElementById('select-toggle').textContent = 'Cancel';
+  document.querySelectorAll('.row-check').forEach(cb => {
+    if (stored.has(cb.value)) {
+      cb.checked = true;
+      cb.closest('.prompt-row-wrap').querySelector('.prompt-row').classList.add('selected');
+    }
+  });
+  updateCount();
+})();
+
+
+function deleteSelected() {
+  const ids = [...getStoredIds()];
+  if (!ids.length) return;
+  if (!confirm('Delete ' + ids.length + ' prompt' + (ids.length !== 1 ? 's' : '') + '?')) return;
+  clearStoredIds();
+  document.getElementById('batch-ids').innerHTML = ids.map(id => '<input type="hidden" name="ids" value="' + id + '">').join('');
+  document.getElementById('batch-form').submit();
+}
+
+function toggleExportMenu(e) {
+  e.stopPropagation();
+  document.getElementById('export-menu').classList.toggle('open');
+}
+document.addEventListener('click', function() {
+  var m = document.getElementById('export-menu');
+  if (m) m.classList.remove('open');
+});
+
+async function exportSelected(format) {
+  document.getElementById('export-menu').classList.remove('open');
+  const ids = [...getStoredIds()];
+  if (!ids.length) return;
+  try {
+    const r = await fetch('/prompts/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, format })
+    });
+    if (!r.ok) { alert('Export failed'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'spicyprompter-export.' + format;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('Export error: ' + e.message); }
+}
+
+async function queueSelected(btn) {
+  const ids = [...getStoredIds()];
+  if (!ids.length) return;
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⚡ loading…';
+  let rows;
+  try {
+    const r = await fetch('/prompts/api/prompts/texts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    rows = await r.json();
+  } catch(e) { btn.textContent = '✗ failed'; btn.disabled = false; return; }
+  rows.sort((a, b) => b.id - a.id);
+  const locked = rows.filter(r => r.starred).length;
+  rows = rows.filter(r => !r.starred);
+  let ok = 0, fail = 0;
+  const withImage = rows.filter(r => r.positive && r.image_path);
+  const withoutImage = rows.filter(r => r.positive && !r.image_path);
+  let overwrite = false;
+  if (withImage.length) overwrite = confirm(withImage.length + ' of ' + rows.length + ' selected prompt' + (rows.length !== 1 ? 's' : '') + ' already have images. Regenerate and overwrite them?');
+  const toQueue = overwrite ? [...withoutImage, ...withImage] : withoutImage;
+  const skipped = rows.length - toQueue.length;
+  for (const row of toQueue) {
+    btn.textContent = '⚡ ' + (ok + fail + 1) + '/' + toQueue.length;
+    const comfyBtn = document.querySelector('.row-btn.comfy[data-id="' + row.id + '"]');
+    try {
+      const r = await fetch('/prompts/api/comfyui/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt_text: row.positive, prompt_db_id: row.id })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        ok++;
+        if (comfyBtn) { comfyBtn.textContent = '#' + (d.number + 1); comfyBtn.title = 'Queued as #' + (d.number + 1); pollComfy(comfyBtn, d.prompt_id, 0); }
+      } else { fail++; if (comfyBtn) { comfyBtn.textContent = '✗'; comfyBtn.classList.add('err'); } }
+    } catch(e) { fail++; }
+  }
+  btn.textContent = '✓ ' + ok + ' queued' + (fail ? ' (' + fail + ' failed)' : '') + (skipped ? ' (' + skipped + ' skipped, have image)' : '') + (locked ? ' (' + locked + ' locked)' : '');
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; selectNone(); }, 4000);
+}
+
+async function queueComfy(e, btn) {
+  e.preventDefault(); e.stopPropagation();
+  if (btn.dataset.starred === '1') return;
+  var text = btn.dataset.text;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    var r = await fetch('/prompts/api/comfyui/queue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt_text: text, prompt_db_id: btn.dataset.id })
+    });
+    var d = await r.json();
+    if (!d.ok) {
+      btn.textContent = '✗';
+      btn.classList.add('err');
+      btn.title = d.error;
+      alert('ComfyUI: ' + d.error);
+      setTimeout(function() { btn.textContent = '⚡'; btn.classList.remove('err'); btn.disabled = false; }, 3000);
+      return;
+    }
+    btn.textContent = '#' + (d.number + 1);
+    btn.title = 'Queued as #' + (d.number + 1);
+    pollComfy(btn, d.prompt_id, 0);
+  } catch(ex) {
+    btn.textContent = '✗'; btn.classList.add('err');
+    setTimeout(function() { btn.textContent = '⚡'; btn.classList.remove('err'); btn.disabled = false; }, 3000);
+  }
+}
+
+function downloadRowImg(e, btn) {
+  e.preventDefault(); e.stopPropagation();
+  var src = btn.dataset.src;
+  if (!src) return;
+  var a = document.createElement("a");
+  a.href = src;
+  a.download = src.split("/").pop();
+  a.click();
+}
+function downloadRowWf(e, btn) {
+  e.preventDefault(); e.stopPropagation();
+  var src = btn.dataset.src;
+  if (!src) return;
+  var a = document.createElement("a");
+  a.href = src;
+  a.download = src.split("/").pop();
+  a.click();
+}
+
+async function fetchComfyImage(btn, filename, subfolder, imgType) {
+  var promptDbId = btn.dataset.id;
+  if (!promptDbId) return;
+  try {
+    var r = await fetch('/prompts/api/comfyui/fetch-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt_db_id: promptDbId, filename: filename, subfolder: subfolder || '', type: imgType || 'output' })
+    });
+    var d = await r.json();
+    if (d.image_url) {
+      var wrap = btn.closest('.prompt-row-wrap');
+      if (!wrap) return;
+      var thumb = wrap.querySelector('.row-thumb');
+      if (!thumb) return;
+      thumb.innerHTML = '<img src="' + d.image_url + '" style="width:100%;height:100%;object-fit:cover">';
+      var dlBtn = wrap.querySelector('.row-btn.dl');
+      if (dlBtn) {
+        dlBtn.dataset.src = d.image_url;
+        dlBtn.classList.add('has-img');
+        dlBtn.classList.remove('ready');
+        void dlBtn.offsetWidth;
+        dlBtn.classList.add('ready');
+        dlBtn.addEventListener('animationend', function() { dlBtn.classList.remove('ready'); }, { once: true });
+      }
+    }
+  } catch(e) {}
+}
+
+async function pollComfy(btn, promptId, attempts) {
+  if (attempts > 180) { btn.textContent = '?'; btn.title = 'Timed out'; btn.disabled = false; return; }
+  await new Promise(function(r) { setTimeout(r, 2000); });
+  try {
+    var r = await fetch('/prompts/api/comfyui/status?id=' + encodeURIComponent(promptId));
+    var d = await r.json();
+    if (d.status === 'running') {
+      btn.textContent = '▶';
+      btn.title = 'Generating…';
+      btn.classList.add('running');
+      pollComfy(btn, promptId, attempts + 1);
+    } else if (d.status === 'pending') {
+      pollComfy(btn, promptId, attempts + 1);
+    } else if (d.status === 'done') {
+      btn.textContent = '✓';
+      btn.classList.remove('running');
+      btn.classList.add('queued');
+      btn.title = d.filename || 'Done';
+      btn.disabled = false;
+      if (d.filename && btn.dataset.id) {
+        fetchComfyImage(btn, d.filename, d.subfolder, d.type);
+      }
+    } else if (d.status === 'error') {
+      btn.textContent = '✗'; btn.classList.remove('running'); btn.classList.add('err');
+      btn.title = 'Generation failed';
+      btn.disabled = false;
+    } else {
+      pollComfy(btn, promptId, attempts + 1);
+    }
+  } catch(ex) {
+    pollComfy(btn, promptId, attempts + 1);
+  }
+}
+
+async function toggleStar(e, btn) {
+  e.preventDefault();
+  e.stopPropagation();
+  const id = btn.dataset.id;
+  try {
+    const res = await fetch('/prompts/' + id + '/star', { method: 'POST' });
+    const data = await res.json();
+    btn.classList.toggle('on', data.starred === 1);
+  } catch(err) { console.error(err); }
+}
+
+function copyPrompt(e, btn) {
+  e.preventDefault();
+  e.stopPropagation();
+  const text = btn.dataset.text;
+  function flash() {
+    btn.textContent = 'Copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+  }
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(flash).catch(() => fallbackCopy(text, flash));
+  } else {
+    fallbackCopy(text, flash);
+  }
+}
+function fallbackCopy(text, cb) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); cb(); } catch(e) { alert('Copy failed'); }
+  document.body.removeChild(ta);
+}
+
+
+// ── PNG Import ──────────────────────────────────────────────────────────────
+let _importWorkflowJson = null;
+let _importWfMeta = {};
+let _importSourceFilename = '';
+let _importImagePath = null;
+let _importSourceFormat = 'unknown';
+let _adaptStatus = null;
+
+const dropZone = document.getElementById('png-drop-zone');
+const fileInput = document.getElementById('png-file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'image/png') handlePngImport(file);
+  else alert('Drop a PNG file.');
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handlePngImport(fileInput.files[0]);
+  fileInput.value = '';
+});
+
+async function handlePngImport(file) {
+  const saveBtn = document.getElementById('import-save-btn');
+  saveBtn.textContent = 'Parsing…';
+  saveBtn.disabled = true;
+  document.getElementById('import-modal-overlay').classList.add('open');
+  document.getElementById('import-no-data').style.display = 'none';
+  document.getElementById('import-prompt-section').style.display = 'block';
+  document.getElementById('import-workflow-section').style.display = 'none';
+  document.getElementById('import-wf-saved-note').style.display = 'none';
+  _importWorkflowJson = null;
+
+  const fd = new FormData();
+  fd.append('image', file);
+  try {
+    const r = await fetch('/prompts/api/import-png', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (d.error) { alert(d.error); closeImportModal(); return; }
+
+    if (!d.has_prompt && !d.has_workflow) {
+      document.getElementById('import-prompt-section').style.display = 'none';
+      document.getElementById('import-no-data').style.display = 'block';
+      saveBtn.style.display = 'none';
+    } else {
+      document.getElementById('import-positive').value = d.positive || '';
+      document.getElementById('import-negative').value = d.negative || '';
+      _importImagePath = d.image_path || null;
+      _importSourceFormat = d.source_format || 'unknown';
+      const fmtNote = document.getElementById('import-format-note');
+      // Show adapt button for non-ComfyUI imports
+      if (d.source_format !== 'comfyui' && d.has_prompt) {
+        fetch('/prompts/api/adapt-status').then(r=>r.json()).then(s=>{
+          _adaptStatus = s;
+          const btn = document.getElementById('import-adapt-btn');
+          if (btn) {
+            btn.style.display = '';
+            const wt = s.workflow_type !== 'unknown' ? s.workflow_type.toUpperCase() : 'my workflow';
+            btn.textContent = 'Adapt for ' + wt;
+          }
+        }).catch(()=>{});
+      } else {
+        const btn = document.getElementById('import-adapt-btn'); if (btn) btn.style.display = 'none';
+      }
+      if (d.source_format === 'a1111') {
+        fmtNote.textContent = '⚠ A1111/SD format — no ComfyUI workflow embedded. Regenerating will use your Settings workflow.';
+        fmtNote.style.display = 'block';
+      } else if (d.source_format === 'unknown') {
+        fmtNote.textContent = '⚠ No workflow metadata found. Regenerating will use your Settings workflow.';
+        fmtNote.style.display = 'block';
+      } else {
+        fmtNote.style.display = 'none';
+      }
+      _importWfMeta = d.wf_meta || {};
+      if (d.has_workflow) {
+        _importWorkflowJson = d.workflow_json;
+        _importSourceFilename = d.source_filename || '';
+        document.getElementById('import-workflow-section').style.display = 'block';
+        document.getElementById('import-wf-name').value = d.suggested_name || '';
+        // Show model/settings hint
+        const hints = [];
+        if (d.wf_meta && d.wf_meta.model) hints.push(d.wf_meta.model);
+        if (d.wf_meta && d.wf_meta.sampler) hints.push(d.wf_meta.sampler);
+        if (d.wf_meta && d.wf_meta.steps) hints.push(d.wf_meta.steps + ' steps');
+        if (d.wf_meta && d.wf_meta.cfg != null && d.wf_meta.cfg !== 1) hints.push('CFG ' + d.wf_meta.cfg);
+        if (d.wf_meta && d.wf_meta.guidance != null) hints.push('guidance ' + d.wf_meta.guidance);
+        const hint = document.getElementById('import-wf-hint');
+        if (hint) { hint.textContent = hints.length ? hints.join(' · ') : ''; hint.style.display = hints.length ? 'block' : 'none'; }
+      }
+      saveBtn.style.display = '';
+    }
+    saveBtn.textContent = 'Import prompt';
+    saveBtn.disabled = false;
+  } catch(e) {
+    alert('Parse failed: ' + e.message);
+    closeImportModal();
+  }
+}
+
+async function adaptPrompt() {
+  const btn = document.getElementById('import-adapt-btn');
+  const positive = document.getElementById('import-positive').value.trim();
+  const negative = document.getElementById('import-negative').value.trim();
+  if (!_adaptStatus) return;
+
+  const useLlm = _adaptStatus.llm_type !== 'none';
+  if (_adaptStatus.llm_type === 'local') {
+    if (!confirm('Your adaptation LLM is local. Running it alongside ComfyUI may cause out-of-memory errors. Unload your ComfyUI model first if you run into issues.\n\nContinue?')) return;
+  } else if (_adaptStatus.llm_type === 'none') {
+    if (!confirm('No LLM configured — will apply rule-based cleanup only (strips A1111 syntax, moves negatives). Continue?')) return;
+  }
+
+  btn.textContent = 'Adapting…';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/prompts/api/adapt-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ positive, negative, use_llm: useLlm })
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error('Adapt failed');
+    document.getElementById('import-positive').value = d.positive || positive;
+    document.getElementById('import-negative').value = d.negative || negative;
+    const fmtNote = document.getElementById('import-format-note');
+    if (d.method === 'llm') {
+      if (fmtNote) { fmtNote.textContent = '✓ AI-adapted for ' + (d.workflow_type || 'your workflow'); fmtNote.style.background = 'rgba(109,184,109,0.12)'; fmtNote.style.color = '#6db86d'; fmtNote.style.borderColor = 'rgba(109,184,109,0.25)'; fmtNote.style.display = 'block'; }
+    } else {
+      if (fmtNote) { fmtNote.textContent = '⚠ LLM unavailable — rule-based cleanup only. Set up Prompt Adaptation in Settings for full rewrite.'; fmtNote.style.background = 'rgba(224,154,58,0.12)'; fmtNote.style.color = '#e09a3a'; fmtNote.style.borderColor = 'rgba(224,154,58,0.25)'; fmtNote.style.display = 'block'; }
+    }
+    btn.style.display = 'none';
+  } catch(e) {
+    btn.textContent = 'Adapt for my workflow';
+    btn.disabled = false;
+    alert('Adapt failed: ' + e.message);
+  }
+}
+
+function closeImportModal() {
+  document.getElementById('import-modal-overlay').classList.remove('open');
+  _importWorkflowJson = null;
+  _importWfMeta = {};
+  _importSourceFilename = '';
+  _importImagePath = null;
+  _importSourceFormat = 'unknown';
+  const fn = document.getElementById('import-format-note'); if (fn) fn.style.display = 'none';
+  const ab = document.getElementById('import-adapt-btn'); if (ab) { ab.style.display = 'none'; ab.disabled = false; ab.textContent = 'Adapt for my workflow'; }
+  _adaptStatus = null;
+}
+
+async function saveImport() {
+  const positive = document.getElementById('import-positive').value.trim();
+  const negative = document.getElementById('import-negative').value.trim();
+  const wfName = document.getElementById('import-wf-name').value.trim();
+  const saveBtn = document.getElementById('import-save-btn');
+
+  saveBtn.textContent = 'Saving…';
+  saveBtn.disabled = true;
+  try {
+    const r = await fetch('/prompts/api/import-png/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        positive, negative,
+        save_workflow: !!_importWorkflowJson,
+        workflow_json: _importWorkflowJson,
+        workflow_name: wfName,
+        source_filename: _importSourceFilename,
+        wf_meta: _importWfMeta,
+        image_path: _importImagePath
+      })
+    });
+    const d = await r.json();
+    if (!d.ok) { alert(d.error || 'Save failed'); saveBtn.textContent = 'Import prompt'; saveBtn.disabled = false; return; }
+    window.location.href = '/prompts/' + d.id;
+  } catch(e) {
+    alert('Save failed: ' + e.message);
+    saveBtn.textContent = 'Import prompt';
+    saveBtn.disabled = false;
+  }
+}
+
+document.getElementById('import-modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeImportModal();
+});
+
+// Resume polling for any prompts that were queued but page was navigated away
+async function resumePending() {
+  try {
+    const r = await fetch('/prompts/api/comfyui/pending');
+    const rows = await r.json();
+    if (!rows.length) return;
+    for (const row of rows) {
+      var btn = document.querySelector('.row-btn.comfy[data-id="' + row.id + '"]');
+      if (!btn) continue;
+      try {
+        const sr = await fetch('/prompts/api/comfyui/status?id=' + encodeURIComponent(row.comfy_prompt_id));
+        const d = await sr.json();
+        if (d.status === 'done') {
+          btn.textContent = '✓';
+          btn.classList.add('queued');
+          btn.title = d.filename || 'Done';
+          btn.disabled = false;
+          if (d.filename) fetchComfyImage(btn, d.filename, d.subfolder, d.type);
+        } else if (d.status === 'error') {
+          btn.textContent = '✗'; btn.classList.add('err'); btn.title = 'Failed';
+        } else {
+          btn.textContent = '⏳'; btn.title = 'Resuming…';
+          pollComfy(btn, row.comfy_prompt_id, 0);
+        }
+      } catch(e) {
+        btn.textContent = '⏳';
+        pollComfy(btn, row.comfy_prompt_id, 0);
+      }
+    }
+  } catch(e) {}
+}
+
+// Restore green checkmark for rows that already have a generated image
+document.querySelectorAll('.row-btn.comfy').forEach(function(btn) {
+  var wrap = btn.closest('.prompt-row-wrap');
+  if (!wrap) return;
+  if (wrap.querySelector('.row-thumb img')) {
+    btn.textContent = '✓';
+    btn.classList.add('queued');
+    btn.title = 'Generated';
+  }
+});
+resumePending();
+window.addEventListener('pageshow', function(e) {
+  if (e.persisted) window.location.reload();
+});
+</script>
+<%- include('../partials/footer') %>

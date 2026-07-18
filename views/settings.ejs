@@ -1,0 +1,471 @@
+<%- include('./partials/header') %>
+<style>
+  .settings-wrap { max-width: 620px; }
+  .settings-section { margin-bottom: 28px; }
+  .settings-section h2 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 5px; }
+  .field input {
+    width: 100%;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    font-family: var(--font);
+    font-size: 13px;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .field select {
+    width: 100%;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    font-family: var(--font);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .field select:focus { outline: none; border-color: var(--accent); }
+  .field .hint { font-size: 11px; color: var(--dim); margin-top: 4px; }
+  .test-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+  #test-result { font-size: 12px; }
+  #test-result.ok { color: #6db86d; }
+  #test-result.err { color: #c96060; }
+  #model-list { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .model-chip {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 2px 10px;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .model-chip:hover { border-color: var(--accent); color: var(--accent); }
+  .save-row { margin-top: 8px; display: flex; align-items: center; gap: 14px; }
+  .saved-msg { font-size: 12px; color: #6db86d; }
+</style>
+
+<div class="page-header">
+  <h1>Settings</h1>
+</div>
+
+<div class="settings-wrap">
+
+  <form method="POST" action="/prompts/settings">
+
+    <div class="settings-section">
+      <h2>LLM Inference</h2>
+
+      <div class="field">
+        <label>Base URL</label>
+        <input type="text" name="llm_base_url" value="<%= config.llm_base_url %>" placeholder="http://localhost:11434/v1">
+        <div class="hint">Include /v1. Ollama: :11434/v1 &nbsp;·&nbsp; llama-server: :8080/v1 or :11438/v1 &nbsp;·&nbsp; LM Studio: :1234/v1 &nbsp;·&nbsp; OpenAI: api.openai.com/v1 &nbsp;·&nbsp; Grok: api.x.ai/v1</div>
+      </div>
+
+      <div class="field">
+        <label>API Key</label>
+        <input type="text" name="llm_api_key" value="<%= config.llm_api_key %>" placeholder="ollama (or blank for local)">
+        <div class="hint">Leave as "ollama" for Ollama. Required for OpenAI / cloud endpoints.</div>
+      </div>
+
+      <div class="field">
+        <label>Default Model</label>
+        <input type="text" name="llm_default_model" id="model-input" value="<%= config.llm_default_model %>" placeholder="qwen3:8b">
+        <div class="hint">Model name as it appears in your inference server. Click a chip below after testing to auto-fill.</div>
+      </div>
+
+      <div class="test-row">
+        <button type="button" class="btn btn-secondary" onclick="testConnection()">Test Connection</button>
+        <span id="test-result"></span>
+      </div>
+      <div id="model-list"></div>
+    </div>
+
+
+    <div class="settings-section">
+      <h2>Generation Parameters</h2>
+
+      <div class="field">
+        <label>Temperature &mdash; <span id="temp-display"><%= config.llm_temperature || '1.0' %></span></label>
+        <input type="range" name="llm_temperature" min="0.1" max="2.0" step="0.05"
+          value="<%= config.llm_temperature || '1.0' %>"
+          oninput="document.getElementById('temp-display').textContent=parseFloat(this.value).toFixed(2)">
+        <div class="hint">Creativity/randomness. 0.1&nbsp;=&nbsp;focused, 2.0&nbsp;=&nbsp;chaotic. Default: 1.0</div>
+      </div>
+
+      <div class="field">
+        <label>Top-p &mdash; <span id="topp-display"><%= (config.llm_top_p && parseFloat(config.llm_top_p) > 0) ? config.llm_top_p : 'off' %></span></label>
+        <input type="range" name="llm_top_p" min="0" max="1.0" step="0.05"
+          value="<%= config.llm_top_p || '0' %>"
+          oninput="document.getElementById('topp-display').textContent=parseFloat(this.value)>0?parseFloat(this.value).toFixed(2):'off'">
+        <div class="hint">Nucleus sampling. 0&nbsp;=&nbsp;off (recommended when using temperature). Limits token pool to top probability mass.</div>
+      </div>
+
+      <div class="field">
+        <label>Min-p &mdash; <span id="minp-display"><%= (config.llm_min_p && parseFloat(config.llm_min_p) > 0) ? config.llm_min_p : 'off' %></span></label>
+        <input type="range" name="llm_min_p" min="0" max="1.0" step="0.01"
+          value="<%= config.llm_min_p || '0' %>"
+          oninput="document.getElementById('minp-display').textContent=parseFloat(this.value)>0?parseFloat(this.value).toFixed(2):'off'">
+        <div class="hint">Min-p sampling. 0&nbsp;=&nbsp;off. Cuts tokens below this fraction of the top token&apos;s probability. Try 0.05&ndash;0.1 with high temperature for creative variety.</div>
+      </div>
+
+      <div class="field">
+        <label>Repetition Penalty &mdash; <span id="reppen-display"><%= config.llm_repetition_penalty || '1.1' %></span></label>
+        <input type="range" name="llm_repetition_penalty" min="1.0" max="1.5" step="0.05"
+          value="<%= config.llm_repetition_penalty || '1.1' %>"
+          oninput="document.getElementById('reppen-display').textContent=parseFloat(this.value).toFixed(2)">
+        <div class="hint">Reduces repeated words/phrases. 1.0&nbsp;=&nbsp;none, 1.1&nbsp;=&nbsp;light (recommended), 1.5&nbsp;=&nbsp;heavy. <strong>Ollama/local only</strong> &mdash; disable below for cloud APIs.</div>
+      </div>
+
+      <div class="field" style="display:flex;align-items:flex-start;gap:10px">
+        <input type="checkbox" name="llm_ollama_params" id="llm-ollama-params"
+          style="width:auto;cursor:pointer;margin-top:2px;accent-color:var(--accent)"
+          <%= config.llm_ollama_params !== 'false' ? 'checked' : '' %>>
+        <div>
+          <label for="llm-ollama-params" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);cursor:pointer;margin-bottom:0">Send Ollama-only params (repetition_penalty)</label>
+          <div class="hint" style="margin-top:3px">Enabled by default for local Ollama models. Disable when using OpenAI, Anthropic, Google, or other cloud APIs that reject this parameter.</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Prompt Length &mdash; <span id="pwords-display"><%= config.llm_prompt_words || '150' %></span> words</label>
+        <input type="range" name="llm_prompt_words" min="60" max="250" step="10"
+          value="<%= config.llm_prompt_words || '150' %>"
+          oninput="document.getElementById('pwords-display').textContent=this.value">
+        <div class="hint">Target word count for generated prompts. Lower = finishes cleanly. Higher = more detail. Max Tokens should be at least 1.5&times; this value.</div>
+      </div>
+
+      <div class="field">
+        <label>Max Tokens</label>
+        <input type="number" name="llm_max_tokens" min="50" max="1000" step="10"
+          value="<%= config.llm_max_tokens || '300' %>" style="width:120px">
+        <div class="hint">Maximum output length. Set to at least 1.5&times; your prompt length target. Default: 300</div>
+      </div>
+
+      <div class="field" style="display:flex;align-items:flex-start;gap:10px;margin-top:16px">
+        <input type="checkbox" name="llm_raw_output" id="llm-raw-output"
+          style="width:auto;cursor:pointer;margin-top:2px;accent-color:var(--accent)"
+          <%= config.llm_raw_output === 'true' ? 'checked' : '' %>>
+        <div>
+          <label for="llm-raw-output" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);cursor:pointer;margin-bottom:0">Enforce raw output (no preamble)</label>
+          <div class="hint" style="margin-top:3px">Appends stricter instructions to the system prompt to prevent &ldquo;Here is your prompt:&rdquo; preambles.</div>
+        </div>
+      </div>
+
+      <div class="field" style="display:flex;align-items:flex-start;gap:10px;margin-top:12px">
+        <input type="checkbox" name="llm_allow_toys" id="llm-allow-toys"
+          style="width:auto;cursor:pointer;margin-top:2px;accent-color:var(--accent)"
+          <%= config.llm_allow_toys === 'true' ? 'checked' : '' %>>
+        <div>
+          <label for="llm-allow-toys" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);cursor:pointer;margin-bottom:0">Allow toys/props in solo scenes</label>
+          <div class="hint" style="margin-top:3px">When enabled, solo acts may include tasteful prop use. Disable to restrict solo scenes to self-pleasure only.</div>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="settings-section">
+      <h2>Prompt Adaptation</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 16px">Used when adapting imported prompts to your workflow style. Leave blank to fall back to the LLM Inference settings above — but if your main LLM is local, a separate cloud API key here avoids GPU memory conflicts.</p>
+
+      <div class="field">
+        <label>Adaptation Base URL</label>
+        <input type="text" id="adapt-url-input" name="adapt_llm_base_url" value="<%= config.adapt_llm_base_url || '' %>" placeholder="https://api.openai.com/v1  (or blank to use LLM Inference)">
+        <div class="hint">Include /v1. OpenAI: api.openai.com/v1 &nbsp;·&nbsp; Grok: api.x.ai/v1 &nbsp;·&nbsp; Ollama: :11434/v1 &nbsp;·&nbsp; llama-server: :11438/v1 &nbsp;&middot;&nbsp; Claude: api.anthropic.com (no /v1)</div>
+      </div>
+
+      <div class="field">
+        <label>Adaptation API Key</label>
+        <input type="text" id="adapt-key-input" name="adapt_llm_api_key" value="<%= config.adapt_llm_api_key || '' %>" placeholder="sk-... or xai-... or ollama">
+      </div>
+
+      <div class="field">
+        <label>Adaptation Model</label>
+        <input type="text" id="adapt-model-input" name="adapt_llm_model" value="<%= config.adapt_llm_model || '' %>" placeholder="grok-3-mini  or  gpt-4o-mini">
+        <div class="hint">Lightweight model recommended. Click a chip below after testing to auto-fill.</div>
+      </div>
+
+      <div class="test-row">
+        <button type="button" class="btn btn-secondary" onclick="testAdaptConnection()">Test Connection</button>
+        <span id="adapt-test-result"></span>
+      </div>
+      <div id="adapt-model-list"></div>
+    </div>
+
+    <div class="settings-section">
+      <h2>ComfyUI</h2>
+
+      <details style="margin-bottom:20px;border:1px solid var(--border);border-radius:4px;padding:0">
+        <summary style="padding:10px 14px;cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.05em;color:var(--muted);list-style:none;display:flex;align-items:center;gap:8px">
+          <span style="color:var(--accent)">⚠</span> VRAM tip — running ComfyUI on the same GPU as your LLM?
+        </summary>
+        <p style="padding:0 14px 12px;font-size:12px;color:var(--muted);line-height:1.7;margin:0">
+          If your LLM and ComfyUI share the same GPU, you may not have enough VRAM to run both at once.
+          Generate your prompts first, then <strong>unload your LLM model</strong> before queuing images to ComfyUI —
+          most Ollama-compatible servers let you do this by sending an empty keep-alive or restarting the model service.
+          Once ComfyUI finishes, reload your model to generate more prompts.
+        </p>
+      </details>
+
+      <div class="field">
+        <label>Host</label>
+        <input type="text" name="comfyui_host" value="<%= config.comfyui_host %>" placeholder="localhost">
+        <div class="hint">IP or hostname of your ComfyUI instance. Default: localhost</div>
+      </div>
+
+      <div class="field">
+        <label>Port</label>
+        <input type="text" name="comfyui_port" value="<%= config.comfyui_port %>" placeholder="8188" style="width:120px">
+        <div class="hint">Default: 8188</div>
+      </div>
+
+      <div class="field">
+        <label>Workflow File</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select name="comfyui_workflow" id="comfy-wf" style="flex:1">
+            <option value="">— select a workflow —</option>
+          </select>
+          <label class="btn btn-secondary" style="cursor:pointer;font-size:12px;white-space:nowrap" title="Upload a ComfyUI API-format workflow JSON">
+            + Upload
+            <input type="file" id="wf-upload" accept=".json" style="display:none" onchange="uploadWorkflow(this)">
+          </label>
+        </div>
+        <div class="hint">
+          <strong>Included workflows:</strong><br>
+          &bull; <code>sdxl-standard-t2i.json</code> &mdash; SD / SDXL (1024&times;1024)<br>
+          &bull; <code>sd15-standard-t2i.json</code> &mdash; Stable Diffusion 1.5 (512&times;768)<br><br>
+          Set your model in the <strong>Model</strong> field below &mdash; no JSON editing needed.<br>
+          To use your own: export from ComfyUI with <em>Save (API Format)</em> (enable Dev Mode first), then upload here.
+        </div>
+        <div id="trigger-words-row" style="display:none;margin-top:8px;align-items:center;gap:6px;flex-wrap:wrap">
+          <label style="font-size:12px;color:var(--muted);white-space:nowrap">Trigger words:</label>
+          <input type="text" id="trigger-words-input" placeholder="e.g. r3alism, realismbloom" style="flex:1;min-width:160px;font-size:12px">
+          <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="saveTriggerWords()">Save</button>
+          <span id="trigger-words-status" style="font-size:11px;color:var(--muted)"></span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Model</label>
+        <input type="text" name="comfyui_model" id="comfy-model" value="<%= config.comfyui_model %>" placeholder="select or type model filename..." autocomplete="off" list="comfy-model-list">
+        <datalist id="comfy-model-list"></datalist>
+        <div class="hint">Your checkpoint filename (e.g. <code>dreamshaper_xl.safetensors</code>). Auto-populated from ComfyUI — click in the field to see your installed models. Overrides whatever model is in the workflow file.</div>
+      </div>
+
+      <div class="field">
+        <label>Prompt Node ID <span style="font-weight:400;text-transform:none;letter-spacing:0">(advanced)</span></label>
+        <input type="text" name="comfyui_node_id" value="<%= config.comfyui_node_id %>" placeholder="auto-detect" style="width:120px">
+        <div class="hint">Leave blank — auto-detects the prompt input node in your workflow. Only set this if you have multiple text inputs and auto-detect picks the wrong one.</div>
+      </div>
+
+      <div class="field">
+        <label>Negative Node ID <span style="font-weight:400;text-transform:none;letter-spacing:0">(advanced)</span></label>
+        <input type="text" name="comfyui_neg_node_id" value="<%= config.comfyui_neg_node_id || '' %>" placeholder="auto-detect" style="width:120px">
+        <div class="hint">Leave blank &mdash; auto-detects the second CLIPTextEncode node as the negative input. Only set if auto-detect picks the wrong one. No effect if workflow has no negative node.</div>
+      </div>
+
+      <div class="field">
+        <label>Prompt Suffix</label>
+        <textarea name="comfyui_prompt_suffix" rows="3" style="resize:vertical;width:100%" placeholder="anatomically correct, perfect anatomy, five fingers, well-formed hands"><%= config.comfyui_prompt_suffix || '' %></textarea>
+        <div class="hint">Appended to every positive prompt before sending to ComfyUI. Works on all models including Flux. Use for anatomy anchors: <code>anatomically correct, perfect anatomy, five fingers</code></div>
+      </div>
+
+      <div class="field">
+        <label>Default Negative Prompt</label>
+        <textarea name="comfyui_neg_default" rows="3" style="resize:vertical;width:100%" placeholder="extra limbs, extra fingers, bad anatomy, deformed, mutated"><%= config.comfyui_neg_default || '' %></textarea>
+        <div class="hint">Sent as the negative prompt for every job. No effect on models that ignore negative prompts (Flux, etc.). Suggested: <code>extra limbs, extra fingers, fused fingers, missing fingers, bad anatomy, deformed, mutated, disfigured</code></div>
+      </div>
+
+      <div class="field">
+        <label>Steps Override</label>
+        <input type="number" name="comfyui_steps" value="<%= config.comfyui_steps || '' %>" placeholder="workflow default" min="0" max="150" style="width:120px">
+        <div class="hint">Overrides step count in your workflow's KSampler. Leave blank to use workflow default.</div>
+      </div>
+
+      <div class="field">
+        <label>CFG Scale Override</label>
+        <input type="number" name="comfyui_cfg" value="<%= config.comfyui_cfg || '' %>" placeholder="workflow default" min="0" max="30" step="0.1" style="width:120px">
+        <div class="hint">Overrides CFG scale in KSampler. Leave blank to use workflow default.</div>
+      </div>
+
+      <div class="field">
+        <label>Denoise Override</label>
+        <input type="number" name="comfyui_denoise" value="<%= config.comfyui_denoise || '' %>" placeholder="workflow default" min="0" max="1" step="0.01" style="width:120px">
+        <div class="hint">Overrides denoise in KSampler (0.0–1.0). Leave blank to use workflow default. 1.0 = full generation.</div>
+      </div>
+
+      <div class="field">
+        <label>Guidance Override <span style="font-weight:400;text-transform:none;letter-spacing:0">(Flux)</span></label>
+        <input type="number" name="comfyui_guidance" value="<%= config.comfyui_guidance || '' %>" placeholder="workflow default" min="0" max="20" step="0.5" style="width:120px">
+        <div class="hint">Overrides FluxGuidance node value. Model-specific &mdash; Flux.1-dev: 3&ndash;4 &bull; Flux.2 Klein: 1.2&ndash;1.5. Leave blank for workflow default.</div>
+      </div>
+
+      <div class="field">
+        <label>Sampler Override</label>
+        <input type="text" name="comfyui_sampler" value="<%= config.comfyui_sampler || '' %>" placeholder="workflow default" style="width:200px" autocomplete="off">
+        <div class="hint">Overrides the sampler in KSampler. Leave blank for workflow default.<br>Common: <code>euler</code> &bull; <code>euler_ancestral</code> &bull; <code>dpmpp_2m</code> &bull; <code>dpmpp_2m_sde</code> &bull; <code>dpmpp_3m_sde</code> &bull; <code>res_2s</code> (anatomy fix, Flux.2 Klein) &bull; <code>res_multistep</code></div>
+      </div>
+    </div>
+
+    <div class="save-row">
+      <button type="submit" class="btn btn-primary">Save Settings</button>
+      <% if (saved) { %><span class="saved-msg">Saved.</span><% } %>
+    </div>
+
+  </form>
+
+</div>
+
+<script>
+async function testConnection() {
+  const url = document.querySelector('input[name="llm_base_url"]').value.trim();
+  const key = document.querySelector('input[name="llm_api_key"]').value.trim();
+  const el = document.getElementById('test-result');
+  const ml = document.getElementById('model-list');
+  el.textContent = 'Testing…';
+  el.className = '';
+  ml.innerHTML = '';
+  try {
+    const r = await fetch('/prompts/settings/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, key }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      el.textContent = 'Connected';
+      el.className = 'ok';
+      if (d.models.length) {
+        d.models.forEach(m => {
+          const chip = document.createElement('span');
+          chip.className = 'model-chip';
+          chip.textContent = m;
+          chip.onclick = () => { document.getElementById('model-input').value = m; };
+          ml.appendChild(chip);
+        });
+      }
+    } else {
+      el.textContent = 'Failed: ' + d.error;
+      el.className = 'err';
+    }
+  } catch (e) {
+    el.textContent = 'Error: ' + e.message;
+    el.className = 'err';
+  }
+}
+
+async function testAdaptConnection() {
+  const url = document.getElementById('adapt-url-input').value.trim()
+             || document.querySelector('input[name="llm_base_url"]').value.trim();
+  const key = document.getElementById('adapt-key-input').value.trim()
+             || document.querySelector('input[name="llm_api_key"]').value.trim();
+  const el = document.getElementById('adapt-test-result');
+  const ml = document.getElementById('adapt-model-list');
+  el.textContent = 'Testing…';
+  el.className = '';
+  ml.innerHTML = '';
+  try {
+    const r = await fetch('/prompts/settings/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, key }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      el.textContent = 'Connected';
+      el.className = 'ok';
+      if (d.models.length) {
+        d.models.forEach(m => {
+          const chip = document.createElement('span');
+          chip.className = 'model-chip';
+          chip.textContent = m;
+          chip.onclick = () => { document.getElementById('adapt-model-input').value = m; };
+          ml.appendChild(chip);
+        });
+      }
+    } else {
+      el.textContent = 'Failed: ' + d.error;
+      el.className = 'err';
+    }
+  } catch (e) {
+    el.textContent = 'Error: ' + e.message;
+    el.className = 'err';
+  }
+}
+
+async function loadModels() {
+  try {
+    const r = await fetch('/prompts/api/comfyui/models');
+    const models = await r.json();
+    const dl = document.getElementById('comfy-model-list');
+    if (!dl) return;
+    dl.innerHTML = models.map(m => '<option value="' + m + '">').join('');
+  } catch(e) {}
+}
+loadModels();
+
+async function loadWorkflows(selectVal) {
+  try {
+    const r = await fetch('/prompts/api/comfyui/workflows');
+    const files = await r.json();
+    const sel = document.getElementById('comfy-wf');
+    if (!sel) return;
+    const current = selectVal || sel.value || '<%= config.comfyui_workflow %>';
+    sel.innerHTML = '<option value="">\u2014 select a workflow \u2014</option>' +
+      files.map(f => '<option value="' + f + '"' + (f === current ? ' selected' : '') + '>' + f + '</option>').join('');
+  } catch(e) {}
+}
+loadWorkflows().then(loadTriggerWords);
+
+document.getElementById('comfy-wf').addEventListener('change', loadTriggerWords);
+
+async function loadTriggerWords() {
+  const filename = document.getElementById('comfy-wf').value;
+  const row = document.getElementById('trigger-words-row');
+  if (!filename) { row.style.display = 'none'; return; }
+  row.style.display = 'flex';
+  document.getElementById('trigger-words-status').textContent = '';
+  try {
+    const r = await fetch('/prompts/api/comfyui/workflow-meta?filename=' + encodeURIComponent(filename));
+    const d = await r.json();
+    document.getElementById('trigger-words-input').value = d.trigger_words || '';
+  } catch(e) {}
+}
+
+async function saveTriggerWords() {
+  const filename = document.getElementById('comfy-wf').value;
+  if (!filename) return;
+  const trigger_words = document.getElementById('trigger-words-input').value;
+  const status = document.getElementById('trigger-words-status');
+  try {
+    await fetch('/prompts/api/comfyui/workflow-meta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename, trigger_words })
+    });
+    status.textContent = 'Saved';
+    setTimeout(() => { status.textContent = ''; }, 2000);
+  } catch(e) { status.textContent = 'Error'; }
+}
+
+async function uploadWorkflow(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('workflow', file);
+  try {
+    const r = await fetch('/prompts/api/comfyui/upload-workflow', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (d.filename) { await loadWorkflows(d.filename); }
+    else alert('Upload failed: ' + (d.error || 'unknown error'));
+  } catch(e) { alert('Upload error: ' + e.message); }
+  input.value = '';
+}
+
+</script>
+
+<p style="font-size:10px;color:var(--muted);font-family:var(--font-mono);margin-top:32px">LoraDatasetBuilder v<%= version %></p>
+<%- include("./partials/footer") %>

@@ -139,7 +139,7 @@ const DEMO_ALLOWED = {
 };
 
 router.get('/generate', (req, res) => { try {
-  const raceCategories     = db.prepare("SELECT id,name,label FROM llm_categories WHERE type='race'      ORDER BY label").all();
+  const raceCategories     = db.prepare("SELECT id,name,label FROM llm_categories WHERE type='race' AND name NOT IN ('asian','ebony','latina') ORDER BY label").all();
   const styleCategories    = db.prepare("SELECT id,name,label FROM llm_categories WHERE type='style'     ORDER BY label").all();
   const DATASET_BODY_ALLOW = new Set(['athletic','chubby','curvy','mature','muscular','petite','plus_size','slim','tattoos']);
   const bodyTypeCategories = db.prepare("SELECT id,name,label FROM llm_categories WHERE type='body_type' ORDER BY label").all()
@@ -165,18 +165,7 @@ router.get('/generate/run', async (req, res) => {
   const { cats, count, model, subject, race, bodytype, role, style, act_random, scene_random, theme_random, hair_color, facial_expression, eye_color, skin_tone, camera_view } = req.query;
 
 
-  if (!cfg.isPaid()) {
-    if (usage.isAtLimit()) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders();
-      res.write('data: ' + JSON.stringify({ type: 'limit', msg: 'Free tier limit reached (' + usage.DEMO_LIMIT + ' prompts). Purchase a license to generate unlimited prompts.' }) + '\n\n');
-      return res.end();
-    }
-  }
-
-  const safeCount   = cfg.isPaid() ? Math.min(999, Math.max(1, parseInt(count) || 5)) : Math.min(5, Math.max(1, parseInt(count) || 5));
+  const safeCount   = Math.min(999, Math.max(1, parseInt(count) || 10));
   const safeModel   = (model || 'qwen3.6:35b-a3b').replace(/[^a-zA-Z0-9.:/@_-]/g, '');
   const safeSubject = (subject || '').replace(/[^a-zA-Z0-9 _,-]/g, '').trim();
   const paid = cfg.isPaid();
@@ -261,7 +250,7 @@ router.get('/generate/run', async (req, res) => {
 
 // ── Dataset Builder ─────────────────────────────────────────────────────────
 router.get('/dataset', (req, res) => {
-  const raceCategories     = db.prepare("SELECT id,name,label FROM llm_categories WHERE type='race'      ORDER BY label").all();
+  const raceCategories     = db.prepare("SELECT id,name,label FROM llm_categories WHERE type='race' AND name NOT IN ('asian','ebony','latina') ORDER BY label").all();
   const DATASET_BODY_ALLOW = new Set(['athletic','busty','chubby','curvy','mature','muscular','petite','piercings','plus_size','slim','tattoos']);
   const bodyTypeCategories = db.prepare("SELECT id,name,label FROM llm_categories WHERE type='body_type' ORDER BY label").all()
     .filter(r => DATASET_BODY_ALLOW.has(r.name));

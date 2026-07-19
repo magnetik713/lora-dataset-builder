@@ -76,7 +76,7 @@ router.get('/', async (req, res) => {
     prompts, categories,
     selectedTags, selectedCategory, selectedSort, showStarred, q: q || '',
     page: safePage, totalPages, total,
-    promptTotal, paid: cfg.isPaid(),
+    promptTotal, paid: cfg.isPaid(), demoLimit: usage.DEMO_LIMIT,
     title: 'Prompt Library'
   });
 });

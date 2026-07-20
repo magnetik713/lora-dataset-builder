@@ -262,18 +262,7 @@ router.get('/dataset', (req, res) => {
 router.get('/dataset/run', async (req, res) => {
   const { count, model, race, bodytype, clothing, gender, age, hair_length, hair_style, facial_hair, clean_bg, hair_color, facial_expression, eye_color, skin_tone, camera_view } = req.query;
 
-  if (!cfg.isPaid()) {
-    if (usage.isAtLimit()) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders();
-      res.write('data: ' + JSON.stringify({ type: 'limit', msg: 'Free tier limit reached (' + usage.DEMO_LIMIT + ' prompts). Purchase a license to generate unlimited prompts.' }) + '\n\n');
-      return res.end();
-    }
-  }
-
-  const safeCount   = cfg.isPaid() ? Math.min(999, Math.max(1, parseInt(count) || 5)) : Math.min(5, Math.max(1, parseInt(count) || 5));
+  const safeCount   = Math.min(999, Math.max(1, parseInt(count) || 5));
   const safeModel   = (model || 'qwen3.6:35b-a3b').replace(/[^a-zA-Z0-9.:/@_-]/g, '');
   const safeRace    = (race     || '').replace(/[^a-z_]/g, '');
   const safeBodytype = (bodytype || '').replace(/[^a-z_,]/g, '');
@@ -284,11 +273,10 @@ router.get('/dataset/run', async (req, res) => {
   const safeHairStyle  = (hair_style  || '').replace(/[^a-z_]/g, '');
   const safeFacialHair = (facial_hair || '').replace(/[^a-z_ ]/g, '');
   const safeCameraView = (camera_view || '').replace(/[^a-z_]/g, '');
-  const paid = cfg.isPaid();
-  const safeHairColor        = paid ? (hair_color        || '').replace(/[^a-z_]/g, '') : '';
-  const safeFacialExpression = paid ? (facial_expression || '').replace(/[^a-z_]/g, '') : '';
-  const safeEyeColor         = paid ? (eye_color         || '').replace(/[^a-z_]/g, '') : '';
-  const safeSkinTone         = paid ? (skin_tone         || '').replace(/[^a-z_]/g, '') : '';
+  const safeHairColor        = (hair_color        || '').replace(/[^a-z_]/g, '');
+  const safeFacialExpression = (facial_expression || '').replace(/[^a-z_]/g, '');
+  const safeEyeColor         = (eye_color         || '').replace(/[^a-z_]/g, '');
+  const safeSkinTone         = (skin_tone         || '').replace(/[^a-z_]/g, '');
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');

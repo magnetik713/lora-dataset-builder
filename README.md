@@ -25,6 +25,14 @@ LoraDatasetBuilder creates structured text prompts for LoRA model training. Sele
 3. Run  — installs Node dependencies and creates a desktop shortcut
 4. Run  or use the shortcut — opens the app at 
 
+## Updating
+
+1. Download the latest zip from [Releases](https://github.com/magnetik713/lora-dataset-builder/releases)
+2. Extract to any folder (fresh folder or over the existing one — both work)
+3. Run `install.bat` to reinstall dependencies
+
+Your data is stored in `%APPDATA%\LoRADatasetBuilder\prompts.db`, separate from the app folder. Updates and reinstalls never touch your data.
+
 ---
 
 ## Usage
@@ -82,6 +90,12 @@ If ComfyUI is not configured, you can still export prompts and generate images s
 - **Consistent attributes** — use the same character settings for all views in a training set.
 - **Shot variety** — include a mix of close-up, medium, and full-body views for better LoRA generalization.
 - **Negatives** — when generating images, add strong negative prompts to prevent unwanted content from correlated training patterns (e.g. ).
+
+---
+
+## Data & Privacy
+
+Data is stored in `%APPDATA%\LoRADatasetBuilder\prompts.db` — separate from the app folder so updates, reinstalls, and folder changes never affect your data. No accounts, no sync, no cloud storage.
 
 ---
 
